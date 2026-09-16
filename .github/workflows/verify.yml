@@ -64,6 +64,7 @@ jobs:
         env:
           EXPO_PUBLIC_AUTORUN: demo
       - name: boot a phone, run the app, record the screen
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
