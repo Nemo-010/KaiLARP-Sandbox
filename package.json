@@ -1,0 +1,33 @@
+{
+  "name": "kailarp-sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "sync-core": "node scripts/sync-core.mjs",
+    "export:web": "expo export --platform web --output-dir dist",
+    "verify:web": "node scripts/verify-web.mjs",
+    "verify": "node scripts/sync-core.mjs && expo export --platform web --output-dir dist && node scripts/verify-web.mjs"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~4.0.1",
+    "expo": "~52.0.28",
+    "expo-asset": "~11.0.5",
+    "expo-status-bar": "~2.0.1",
+    "jszip": "^3.10.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.6",
+    "react-native-web": "~0.19.13",
+    "react-native-webview": "13.12.5"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.12",
+    "playwright": "^1.49.1",
+    "typescript": "~5.3.3"
+  }
+}

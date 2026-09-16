@@ -1,0 +1,85 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: web build + screen-record verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch KaiLARP-core (the shim source of truth)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/KaiLARP-core
+          path: ../KaiLARP-core
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/sync-core.mjs --core ../KaiLARP-core
+      - run: npx expo export --platform web --output-dir dist
+        env:
+          CI: 1
+      - run: node scripts/verify-web.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sandbox-web-verification
+          path: |
+            out/sandbox-verification.json
+            out/sandbox-verification.md
+            out/sandbox-summary.png
+            out/screen/
+
+  android:
+    name: android apk + emulator screen recording
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/KaiLARP-core
+          path: ../KaiLARP-core
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: node scripts/sync-core.mjs --core ../KaiLARP-core
+      - name: build the apk
+        run: |
+          npx expo prebuild --platform android --no-install
+          cd android
+          ./gradlew assembleRelease --no-daemon
+        env:
+          EXPO_PUBLIC_AUTORUN: demo
+      - name: boot a phone, run the app, record the screen
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          script: |
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            adb shell am start -n dev.kailarp.sandbox/.MainActivity
+            sleep 20
+            adb shell screenrecord --time-limit 30 --size 480x960 /sdcard/kailarp-device.mp4 &
+            sleep 35
+            adb pull /sdcard/kailarp-device.mp4 out/kailarp-device.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sandbox-device-recording
+          path: |
+            out/kailarp-device.mp4
+            android/app/build/outputs/apk/release/app-release.apk

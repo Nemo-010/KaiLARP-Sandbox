@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "KaiLARP Sandbox",
+    "slug": "kailarp-sandbox",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "kailarp",
+    "backgroundColor": "#0e1420",
+    "splash": {
+      "backgroundColor": "#0e1420",
+      "resizeMode": "contain"
+    },
+    "android": {
+      "package": "dev.kailarp.sandbox",
+      "adaptiveIcon": {
+        "backgroundColor": "#0e1420"
+      },
+      "permissions": []
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
