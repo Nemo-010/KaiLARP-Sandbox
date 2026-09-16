@@ -22,13 +22,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/KaiLARP-core
-          path: ../KaiLARP-core
+          path: core-src
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm ci
+      - name: install ffmpeg for the recording probes
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium
-      - run: node scripts/sync-core.mjs --core ../KaiLARP-core
+      - run: node scripts/sync-core.mjs --core core-src
       - run: npx expo export --platform web --output-dir dist
         env:
           CI: 1
@@ -58,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/KaiLARP-core
-          path: ../KaiLARP-core
+          path: core-src
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -68,7 +70,7 @@ jobs:
           java-version: 17
       - uses: android-actions/setup-android@v3
       - run: npm ci
-      - run: node scripts/sync-core.mjs --core ../KaiLARP-core
+      - run: node scripts/sync-core.mjs --core core-src
       - name: build the apk
         run: |
           npx expo prebuild --platform android --no-install
