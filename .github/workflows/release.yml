@@ -114,10 +114,8 @@ jobs:
             -no-window -no-snapshot -noaudio -no-boot-anim
             -gpu swiftshader_indirect -camera-back none -camera-front none
           script: |
-            apk=$(ls release-assets/*.apk | head -1)
-            echo "installing $apk"
             adb wait-for-device
-            adb install -r "$apk"
+            adb install -r $(ls release-assets/*.apk | head -1)
             adb shell am start -n dev.kailarp.sandbox/.MainActivity
             sleep 25
             adb shell screenrecord --time-limit 30 --size 480x960 /sdcard/kailarp-device.mp4 &
