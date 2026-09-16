@@ -75,8 +75,9 @@ tag. It builds and attaches:
 - `kailarp-sandbox-web-verification.{json,md}`, the summary screenshot and the
   web screen recordings
 
-The release job runs behind the two build jobs plus an emulator job, so a
-release only exists if the app built and ran.
+The release job runs behind the two build jobs, and attaches an emulator
+screencast when the emulator cooperates; the APK build and the web
+verification are what gate the release.
 
 ## Screen recording, honestly
 

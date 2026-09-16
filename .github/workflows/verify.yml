@@ -70,12 +70,19 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_2
+          emulator-boot-timeout: 900
+          disable-animations: false
+          emulator-options: >-
+            -no-window -no-snapshot -noaudio -no-boot-anim
+            -gpu swiftshader_indirect -camera-back none -camera-front none
           script: |
+            adb wait-for-device
             adb install -r android/app/build/outputs/apk/release/app-release.apk
             adb shell am start -n dev.kailarp.sandbox/.MainActivity
-            sleep 20
+            sleep 25
             adb shell screenrecord --time-limit 30 --size 480x960 /sdcard/kailarp-device.mp4 &
             sleep 35
+            mkdir -p out
             adb pull /sdcard/kailarp-device.mp4 out/kailarp-device.mp4
       - uses: actions/upload-artifact@v4
         if: always()

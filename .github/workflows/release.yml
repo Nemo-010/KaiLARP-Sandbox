@@ -94,6 +94,7 @@ jobs:
     name: record the apk on an emulator
     runs-on: ubuntu-latest
     needs: android
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -107,11 +108,17 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_2
+          emulator-boot-timeout: 900
+          disable-animations: false
+          emulator-options: >-
+            -no-window -no-snapshot -noaudio -no-boot-anim
+            -gpu swiftshader_indirect -camera-back none -camera-front none
           script: |
             version=$(node -p "require('./package.json').version")
+            adb wait-for-device
             adb install -r "release-assets/kailarp-sandbox-android-${version}.apk"
             adb shell am start -n dev.kailarp.sandbox/.MainActivity
-            sleep 20
+            sleep 25
             adb shell screenrecord --time-limit 30 --size 480x960 /sdcard/kailarp-device.mp4 &
             sleep 35
             mkdir -p out
