@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -58,6 +59,8 @@ export default function App() {
   const recorder = useMemo(() => createRecorder(), []);
   const handleRef = useRef<{ stop: () => Promise<RecordingReport> } | null>(null);
   const autoran = useRef(false);
+  const stageRef = useRef<Stage>('idle');
+  stageRef.current = stage;
 
   const setStep = useCallback((key: string, status: StepStatus, note?: string) => {
     setSteps((prev) => prev.map((s) => (s.key === key ? { ...s, status, note: note ?? s.note } : s)));
@@ -135,6 +138,18 @@ export default function App() {
     [recorder, reset, setStep],
   );
 
+  const completeRun = useCallback(
+    async (rows: CheckRow[], note: string) => {
+      setChecks(rows);
+      setStep('boot', rows.length > 0 && rows.every((r) => r.ok) ? 'ok' : 'fail', note);
+      const captured = handleRef.current ? await handleRef.current.stop() : null;
+      handleRef.current = null;
+      if (captured) setRecording(captured);
+      setStage('done');
+    },
+    [setStep],
+  );
+
   const onRuntimeMessage = useCallback(
     async (message: RuntimeMessage) => {
       switch (message.type) {
@@ -154,22 +169,35 @@ export default function App() {
             ok: !!value.ok,
             detail: value.detail ?? '',
           }));
-          setChecks(rows);
-          setStep('boot', rows.every((r) => r.ok) ? 'ok' : 'fail', `${rows.filter((r) => r.ok).length}/${rows.length} probes passed`);
-          const captured = handleRef.current ? await handleRef.current.stop() : null;
-          handleRef.current = null;
-          if (captured) setRecording(captured);
-          setStage('done');
+          await completeRun(rows, `${rows.filter((r) => r.ok).length}/${rows.length} probes passed`);
           break;
         }
-        case 'dump':
-          setLogs((l) => [...l.slice(-200), `dump: ${JSON.stringify((message.dump as { calls?: unknown }).calls ?? {})}`]);
+        case 'dump': {
+          const dump = message.dump as { completed?: boolean; calls?: Record<string, number>; errors?: string[] } | null;
+          setLogs((l) => [...l.slice(-200), `dump: ${JSON.stringify(dump?.calls ?? {})}`]);
+          // A real KaiOS app has never heard of __KAILARP__.finish. When the
+          // runtime reports that it is still going, report what it actually
+          // did instead of waiting forever.
+          if (dump && dump.completed === false && stageRef.current === 'running') {
+            const calls = Object.entries(dump.calls ?? {});
+            const rows: CheckRow[] = [
+              { name: 'runtime.installed', ok: true, detail: 'the B2G compatibility layer answered the app' },
+              { name: 'app.ran', ok: calls.length > 0, detail: `${calls.length} moz*/B2G calls: ${calls.slice(0, 6).map(([k, v]) => `${k}×${v}`).join(', ') || 'none'}` },
+              { name: 'app.finished', ok: false, detail: 'the app never called __KAILARP__.finish; this is a real app, not a KaiLARP probe' },
+            ];
+            if ((dump.errors ?? []).length) {
+              const errors = dump.errors ?? [];
+              rows.push({ name: 'runtime.refusals', ok: false, detail: errors.slice(0, 3).join(' | ') });
+            }
+            await completeRun(rows, 'the app loaded but did not report back');
+          }
           break;
+        }
         default:
           break;
       }
     },
-    [setStep],
+    [completeRun, setStep],
   );
 
   const onRuntimeMessageRef = useRef(onRuntimeMessage);
@@ -177,12 +205,23 @@ export default function App() {
   const stableMessageHandler = useCallback((m: RuntimeMessage) => void onRuntimeMessageRef.current(m), []);
 
   const stages = steps.map((s) => ({ label: s.label, done: s.status === 'ok', active: s.status === 'active', failed: s.status === 'fail' }));
-  // EXPO_PUBLIC_AUTORUN=demo lets the CI device harness drive the whole flow
-  // without tapping the screen, so the screencast is reproducible.
+  // Driven by the CI device harness so a screencast is reproducible without
+  // tapping: a kailarp:// deep link wins, otherwise EXPO_PUBLIC_AUTORUN.
   React.useEffect(() => {
     if (autoran.current) return;
     autoran.current = true;
-    if (process.env.EXPO_PUBLIC_AUTORUN === 'demo') void prepare('demo');
+    void (async () => {
+      let target: string | null = null;
+      try {
+        const initial = await Linking.getInitialURL();
+        const match = initial ? initial.match(/[?&]url=([^&]+)/) : null;
+        if (match) target = decodeURIComponent(match[1]);
+      } catch {
+        /* no linking support in this host */
+      }
+      if (!target) target = process.env.EXPO_PUBLIC_AUTORUN ?? null;
+      if (target) await prepare(target);
+    })();
   }, [prepare]);
 
   const capabilityRows = useMemo(

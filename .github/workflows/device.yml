@@ -5,6 +5,11 @@ name: device-recording
 # emulator) can be re-run without rebuilding anything.
 #
 #   gh workflow run device-recording.yml -f tag=v0.1.0
+#   gh workflow run device-recording.yml -f tag=v0.1.0 \
+#     -f deep_link='kailarp://run?url=https%3A%2F%2Fdumps.tadiphone.dev%2F...'
+#
+# The deep link makes the app boot that URL instead of the bundled demo, so a
+# real dump app can be recorded on a real Android runtime.
 
 on:
   workflow_dispatch:
@@ -17,6 +22,10 @@ on:
         description: 'APK asset name on that release'
         required: false
         default: '*.apk'
+      deep_link:
+        description: 'optional kailarp://run?url=<urlencoded> to boot on launch'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -49,11 +58,12 @@ jobs:
             -gpu swiftshader_indirect -camera-back none -camera-front none
           script: |
             adb wait-for-device
+            until adb shell pm path android >/dev/null 2>&1; do sleep 3; done
             adb install -r $(ls release-assets/*.apk | head -1)
-            adb shell am start -n dev.kailarp.sandbox/.MainActivity
-            sleep 25
-            adb shell screenrecord --time-limit 30 --size 480x960 /sdcard/kailarp-device.mp4 &
-            sleep 35
+            [ -n "${{ github.event.inputs.deep_link }}" ] && adb shell am start -a android.intent.action.VIEW -d "${{ github.event.inputs.deep_link }}" || adb shell am start -n dev.kailarp.sandbox/.MainActivity
+            sleep 40
+            adb shell screenrecord --time-limit 40 --size 480x960 /sdcard/kailarp-device.mp4 &
+            sleep 50
             mkdir -p out
             adb pull /sdcard/kailarp-device.mp4 out/kailarp-device.mp4
       - uses: actions/upload-artifact@v4
@@ -66,6 +76,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version=$(basename release-assets/*.apk | sed -E 's/.*-([0-9]+\.[0-9]+\.[0-9]+)\.apk/\1/')
+          version=$(basename $(ls release-assets/*.apk | head -1) | sed -E 's/.*-([0-9]+\.[0-9]+\.[0-9]+)\.apk/\1/')
           mv out/kailarp-device.mp4 "kailarp-sandbox-device-${version}.mp4"
           gh release upload "${{ github.event.inputs.tag }}" "kailarp-sandbox-device-${version}.mp4" --clobber
