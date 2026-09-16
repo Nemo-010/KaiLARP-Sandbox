@@ -1,0 +1,73 @@
+name: device-recording
+
+# Records an already-published APK on an emulator and attaches the video to the
+# release. Kept separate from release.yml so the flaky part (booting an
+# emulator) can be re-run without rebuilding anything.
+#
+#   gh workflow run device-recording.yml -f tag=v0.1.0
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'release tag holding the APK'
+        required: true
+        default: v0.1.0
+      asset:
+        description: 'APK asset name on that release'
+        required: false
+        default: '*.apk'
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    name: record the released apk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch the apk from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release-assets
+          gh release download "${{ github.event.inputs.tag }}" -R "$GITHUB_REPOSITORY" \
+            -p "${{ github.event.inputs.asset }}" -D release-assets --clobber
+          ls -la release-assets
+      - name: boot a phone, install, record
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          emulator-boot-timeout: 900
+          disable-animations: false
+          emulator-options: >-
+            -no-window -no-snapshot -noaudio -no-boot-anim
+            -gpu swiftshader_indirect -camera-back none -camera-front none
+          script: |
+            apk=$(ls release-assets/*.apk | head -1)
+            echo "installing $apk"
+            adb wait-for-device
+            adb install -r "$apk"
+            adb shell am start -n dev.kailarp.sandbox/.MainActivity
+            sleep 25
+            adb shell screenrecord --time-limit 30 --size 480x960 /sdcard/kailarp-device.mp4 &
+            sleep 35
+            mkdir -p out
+            adb pull /sdcard/kailarp-device.mp4 out/kailarp-device.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kailarp-device-recording
+          path: out/
+      - name: attach the recording to the release
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(basename release-assets/*.apk | sed -E 's/.*-([0-9]+\.[0-9]+\.[0-9]+)\.apk/\1/')
+          mv out/kailarp-device.mp4 "kailarp-sandbox-device-${version}.mp4"
+          gh release upload "${{ github.event.inputs.tag }}" "kailarp-sandbox-device-${version}.mp4" --clobber
